@@ -11,30 +11,32 @@
 #import <GoogleMobileAds/GoogleMobileAds.h>
 #import <SmaatoSDKNative/SmaatoSDKNative.h>
 #import "SMAAdMobSmaatoNativeAdapter.h"
-#import "SMAAdMobSmaatoMediatedNativeAd.h"
 
 static NSString *const kSMAAdMobCustomEventInfoAdSpaceIdKey = @"adspaceId";
-static NSString *const kSMAAdMobNativeAdapterVersion = @"8.13.0.0";
+static NSString *const kSMAAdMobSmaatoNativeAdapterVersion = @"9.8.0.0";
 
 typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifiedNativeAd> mediatedAd);
 
-@interface SMAAdMobSmaatoNativeAdapter () <GADCustomEventNativeAd, SMANativeAdDelegate>
+@interface SMAAdMobSmaatoNativeAdapter () <GADMediationNativeAd, SMANativeAdDelegate, GADMediationAdapter>
 
 @property (nonatomic) SMANativeAd *nativeAd;
 @property (nonatomic, weak) UIViewController *presentingViewController;
 @property (nonatomic) GADNativeAdImageAdLoaderOptions *imageLoaderOptions;
 @property (nonatomic, copy) NSString *adSpaceId;
 @property (nonatomic) NSMutableArray<SMASMAAdMobMediatedNativeAdDeferredCallback> *deferredCallbacks;
+@property (nonatomic) GADMediationNativeLoadCompletionHandler loadCompletionHandler;
+@property (nonatomic, weak, nullable) id<GADMediationNativeAdEventDelegate> delegate;
+@property (nonatomic) SMANativeAdRenderer *adRenderer;
+@property (nonatomic, copy) NSArray<GADNativeAdImage *> *mainImages;
+@property (nonatomic) GADNativeAdImage *iconImage;
 
 @end
 
 @implementation SMAAdMobSmaatoNativeAdapter
 
-@synthesize delegate;
-
 + (NSString *)version
 {
-    return kSMAAdMobNativeAdapterVersion;
+    return kSMAAdMobSmaatoNativeAdapterVersion;
 }
 
 - (NSString *)fetchValueForKey:(NSString *)definedKey fromEventInfo:(NSDictionary *)info
@@ -58,11 +60,11 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
     NSString *errorMessage = @"AdSpaceId can not be extracted. Please check your configuration on AdMob dashboard.";
     NSLog(@"[SmaatoSDK] [Error] %@: %@", [self smaatoMediationNetworkName], errorMessage);
 
-    if ([self.delegate respondsToSelector:@selector(customEventBanner:didFailAd:)]) {
+    if ([self.delegate respondsToSelector:@selector(didFailToPresentWithError:)]) {
         NSDictionary *userInfo = @{ NSLocalizedDescriptionKey : errorMessage };
         NSError *error = [NSError errorWithDomain:[self smaatoMediationNetworkName] code:kSMAErrorCodeInvalidRequest userInfo:userInfo];
 
-        [self.delegate customEventNativeAd:self didFailToLoadWithError:error];
+        [self.delegate didFailToPresentWithError:error];
     }
 
     return NO;
@@ -72,14 +74,14 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
 {
     NSMutableDictionary *parsedServerParameters = [NSMutableDictionary new];
     [[serverParameter componentsSeparatedByString:@"&"]
-        enumerateObjectsUsingBlock:^(NSString *_Nonnull obj, NSUInteger idx, BOOL *_Nonnull stop) {
-            NSArray *pair = [obj componentsSeparatedByString:@"="];
-            if (pair.count > 1) {
-                id key = pair[0];
-                id value = pair[1];
-                parsedServerParameters[key] = value;
-            }
-        }];
+    enumerateObjectsUsingBlock:^(NSString *_Nonnull obj, NSUInteger idx, BOOL *_Nonnull stop) {
+        NSArray *pair = [obj componentsSeparatedByString:@"="];
+        if (pair.count > 1) {
+            id key = pair[0];
+            id value = pair[1];
+            parsedServerParameters[key] = value;
+        }
+    }];
 
     return [parsedServerParameters copy];
 }
@@ -94,21 +96,136 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
     return self.adSpaceId;
 }
 
-#pragma mark - GADCustomEventNativeAd
+#pragma mark - Assets
 
-- (void)requestNativeAdWithParameter:(NSString *)serverParameter
-                             request:(GADCustomEventRequest *)request
-                             adTypes:(NSArray *)adTypes
-                             options:(NSArray *)options
-                  rootViewController:(UIViewController *)rootViewController
+- (NSString *)headline
 {
+    return self.adRenderer.nativeAssets.title;
+}
+
+- (NSString *)body
+{
+    return self.adRenderer.nativeAssets.mainText;
+}
+
+- (GADNativeAdImage *)icon
+{
+    return self.iconImage;
+}
+
+- (NSArray<GADNativeAdImage *> *)images
+{
+    return self.mainImages.count > 0 ? self.mainImages : nil;
+}
+
+- (NSString *)callToAction
+{
+    return self.adRenderer.nativeAssets.cta;
+}
+
+- (NSDecimalNumber *)starRating
+{
+    return nil;
+}
+
+- (NSString *)price
+{
+    return nil;
+}
+
+- (NSString *)store
+{
+    return nil;
+}
+
+- (NSDictionary<NSString *, id> *)extraAssets
+{
+    return nil;
+}
+
+- (NSString *)advertiser
+{
+    return nil;
+}
+
+- (UIView *)adChoicesView
+{
+    return self.adRenderer.privacyView;
+}
+
+#pragma mark - <GADMediatedUnifiedNativeAd> Callbacks
+
+- (void)didRenderInView:(UIView *)view
+    clickableAssetViews:(NSDictionary<GADNativeAssetIdentifier, UIView *> *)clickableAssetViews
+ nonclickableAssetViews:(NSDictionary<GADNativeAssetIdentifier, UIView *> *)nonclickableAssetViews
+         viewController:(UIViewController *)viewController
+{
+    [self.adRenderer registerViewForImpression:view];
+    [self.adRenderer registerViewsForClickAction:clickableAssetViews.allValues];
+    self.presentingViewController = viewController;
+}
+
+- (void)didRecordClickOnAssetWithName:(GADNativeAssetIdentifier)assetName
+                                 view:(UIView *)view
+                       viewController:(UIViewController *)viewController
+{
+    // Method is not applicable because Smaato SDK handles click itself
+}
+
+- (void)didRecordImpression
+{
+    // Method is not applicable because Smaato SDK tracks impression itself
+}
+
+- (void)nativeAdDidClick:(SMANativeAd *)nativeAd
+{
+    [GADMediatedUnifiedNativeAdNotificationSource mediatedNativeAdDidRecordClick:self];
+}
+
+- (void)nativeAdDidImpress:(SMANativeAd *)nativeAd
+{
+    [GADMediatedUnifiedNativeAdNotificationSource mediatedNativeAdDidRecordImpression:self];
+}
+
+- (void)nativeAdWillPresentModalContent:(SMANativeAd *)nativeAd
+{
+    [GADMediatedUnifiedNativeAdNotificationSource mediatedNativeAdWillPresentScreen:self];
+}
+
+- (void)nativeAdDidPresentModalContent:(SMANativeAd *)nativeAd
+{
+    // No corresponding delegate method from AdMob SDK available.
+}
+
+- (void)nativeAdDidDismissModalContent:(SMANativeAd *)nativeAd
+{
+    [GADMediatedUnifiedNativeAdNotificationSource mediatedNativeAdWillDismissScreen:self];
+    [GADMediatedUnifiedNativeAdNotificationSource mediatedNativeAdDidDismissScreen:self];
+}
+
+- (void)nativeAdWillLeaveApplicationFromAd:(SMANativeAd *)nativeAd
+{
+    //mediatedNativeAdWillLeaveApplication is depricated with no replacement method
+    //[GADMediatedUnifiedNativeAdNotificationSource mediatedNativeAdWillLeaveApplication:self];
+}
+#pragma mark - GADMediationNativeAd
+
+- (void)loadNativeAdForAdConfiguration:(GADMediationNativeAdConfiguration *)adConfiguration completionHandler:(GADMediationNativeLoadCompletionHandler)completionHandler
+{
+    
+    self.loadCompletionHandler = completionHandler;
+    
     self.deferredCallbacks = [NSMutableArray new];
 
     // Persisting instance of presenting view controller
-    self.presentingViewController = rootViewController;
+    self.presentingViewController = adConfiguration.topViewController;
 
     // Extract key-value pairs from passed server parameter string
-    NSDictionary *info = [self dictionaryFromServerParameter:serverParameter];
+    NSDictionary *info = nil;
+    
+    if ([adConfiguration.credentials.settings objectForKey:@"parameter"]) {
+        info = [self dictionaryFromServerParameter:adConfiguration.credentials.settings[@"parameter"]];
+    }
 
     self.adSpaceId = [self fetchValueForKey:kSMAAdMobCustomEventInfoAdSpaceIdKey fromEventInfo:info];
 
@@ -122,10 +239,10 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
     self.nativeAd.delegate = self;
 
     // Pass user location
-    if (request.userHasLocation) {
-        SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:request.userLatitude
-                                                                longitude:request.userLongitude
-                                                       horizontalAccuracy:request.userLocationAccuracyInMeters
+    if (adConfiguration.hasUserLocation) {
+        SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:adConfiguration.userLatitude
+                                                                longitude:adConfiguration.userLongitude
+                                                       horizontalAccuracy:adConfiguration.userLocationAccuracyInMeters
                                                                 timestamp:[NSDate date]];
         SmaatoSDK.userLocation = userLocation;
     }
@@ -144,10 +261,10 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
 
     // Passing mediation information
     adRequestParams.mediationNetworkName = [self smaatoMediationNetworkName];
-    adRequestParams.mediationAdapterVersion = kSMAAdMobNativeAdapterVersion;
+    adRequestParams.mediationAdapterVersion = kSMAAdMobSmaatoNativeAdapterVersion;
     adRequestParams.mediationNetworkSDKVersion = [NSString stringWithFormat:@"%s", GoogleMobileAdsVersionString];
 
-    for (GADNativeAdImageAdLoaderOptions *imageOptions in options) {
+    for (GADNativeAdImageAdLoaderOptions *imageOptions in adConfiguration.options) {
         if (![imageOptions isKindOfClass:[GADNativeAdImageAdLoaderOptions class]]) {
             continue;
         }
@@ -175,38 +292,27 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
 - (void)nativeAd:(SMANativeAd *)nativeAd didLoadWithAdRenderer:(SMANativeAdRenderer *)renderer
 {
     [self handleResponse:renderer];
+    if (self.loadCompletionHandler) {
+        self.delegate = self.loadCompletionHandler(self, nil);
+        self.loadCompletionHandler = nil;
+    }
 }
 
 - (void)nativeAd:(SMANativeAd *)nativeAd didFailWithError:(NSError *)error
 {
-    if ([self.delegate respondsToSelector:@selector(customEventNativeAd:didFailToLoadWithError:)]) {
-        [self.delegate customEventNativeAd:self didFailToLoadWithError:error];
+    if ([self.delegate respondsToSelector:@selector(didFailToPresentWithError:)]) {
+        [self.delegate didFailToPresentWithError:error];
     }
 }
 
 - (void)nativeAdDidTTLExpire:(SMANativeAd *)nativeAd
 {
-    if ([self.delegate respondsToSelector:@selector(customEventNativeAd:didFailToLoadWithError:)]) {
+    if ([self.delegate respondsToSelector:@selector(didFailToPresentWithError:)]) {
         NSString *errorMessage = @"Native TTL has expired.";
         NSDictionary *userInfo = @{ NSLocalizedDescriptionKey : errorMessage };
         NSError *error = [NSError errorWithDomain:[self smaatoMediationNetworkName] code:kSMAErrorCodeNoAdAvailable userInfo:userInfo];
 
-        [self.delegate customEventNativeAd:self didFailToLoadWithError:error];
-    }
-}
-
-- (void)nativeAdDidImpress:(SMANativeAd *)nativeAd
-{
-    // This workaround helps to prevent ads impression analytics discrepancy issue between Smaato and Admob, because
-    //\c nativeAdDidImpress: method might be called before \c nativeAd:didLoadWithAdRenderer: method will be
-    // able to finish image creatives preloading (if needed) and create given \SMAAdMobSmaatoMediatedNativeAd
-    // object and call \c customEventNativeAd:didReceiveMediatedUnifiedNativeAd: callback
-    @synchronized(self.deferredCallbacks)
-    {
-        SMASMAAdMobMediatedNativeAdDeferredCallback callback = ^(id<GADMediatedUnifiedNativeAd> mediatedAd) {
-            [GADMediatedUnifiedNativeAdNotificationSource mediatedNativeAdDidRecordImpression:mediatedAd];
-        };
-        [self.deferredCallbacks addObject:callback];
+        [self.delegate didFailToPresentWithError:error];
     }
 }
 
@@ -254,24 +360,15 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
             [mainImages addObject:image];
         }
     }];
-
-    SMAAdMobSmaatoMediatedNativeAd *mediatedNativeAd = [[SMAAdMobSmaatoMediatedNativeAd alloc] initWithNativeAd:self.nativeAd
-                                                                                                     adRenderer:renderer
-                                                                                                  andMainImages:mainImages
-                                                                                                   andIconImage:iconImage];
-
-    if ([self.delegate respondsToSelector:@selector(customEventNativeAd:didReceiveMediatedUnifiedNativeAd:)]) {
-        [self.delegate customEventNativeAd:self didReceiveMediatedUnifiedNativeAd:mediatedNativeAd];
-    }
-
-    self.nativeAd.delegate = mediatedNativeAd;
-    [self callDeferredCallbacksWithMediatedNativeAd:mediatedNativeAd];
+    
+    self.iconImage = iconImage;
+    self.mainImages = mainImages;
+    self.adRenderer = renderer;
 }
 
 - (void)callDeferredCallbacksWithMediatedNativeAd:(id<GADMediatedUnifiedNativeAd>)mediatedAd
 {
-    @synchronized(self.deferredCallbacks)
-    {
+    @synchronized(self.deferredCallbacks) {
         if (mediatedAd) {
             for (SMASMAAdMobMediatedNativeAdDeferredCallback callback in self.deferredCallbacks) {
                 callback(mediatedAd);
@@ -279,6 +376,36 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
             [self.deferredCallbacks removeAllObjects];
         }
     }
+}
+
+#pragma mark - GADMediationAdapter
+
++ (GADVersionNumber)adSDKVersion {
+    NSString *versionString = [SmaatoSDK sdkVersion];
+    NSArray *versionComponents = [versionString componentsSeparatedByString:@"."];
+    GADVersionNumber version = { 0 };
+    if (versionComponents.count == 3) {
+        version.majorVersion = [versionComponents[0] integerValue];
+        version.minorVersion = [versionComponents[1] integerValue];
+        version.patchVersion = [versionComponents[2] integerValue];
+    }
+    return version;
+}
+
++ (GADVersionNumber)adapterVersion {
+    NSString *versionString = kSMAAdMobSmaatoNativeAdapterVersion;
+    NSArray *versionComponents = [versionString componentsSeparatedByString:@"."];
+    GADVersionNumber version = { 0 };
+    if (versionComponents.count == 4) {
+        version.majorVersion = [versionComponents[0] integerValue];
+        version.minorVersion = [versionComponents[1] integerValue];
+        version.patchVersion = [versionComponents[2] integerValue];
+    }
+    return version;
+}
+
++ (nullable Class<GADAdNetworkExtras>)networkExtrasClass {
+    return nil;
 }
 
 @end

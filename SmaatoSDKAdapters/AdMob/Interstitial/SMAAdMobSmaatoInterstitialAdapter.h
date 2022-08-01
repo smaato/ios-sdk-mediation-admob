@@ -10,6 +10,6 @@
 
 #import <Foundation/Foundation.h>
 
-@interface SMAAdMobSmaatoInterstitialAdapter : NSObject
+@interface SMAAdMobSmaatoInterstitialAdapter: NSObject
 @property (class, nonatomic, readonly) NSString *version;
 @end

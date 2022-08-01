@@ -14,26 +14,35 @@
 
 static NSString *const kSMAAdMobCustomEventInfoPublisherIdKey = @"publisherId";
 static NSString *const kSMAAdMobCustomEventInfoAdSpaceIdKey = @"adspaceId";
-static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"8.13.0.0";
+static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"9.8.0.0";
 
-@interface SMAAdMobSmaatoInterstitialAdapter () <SMAInterstitialDelegate, GADCustomEventInterstitial>
+@interface SMAAdMobSmaatoInterstitialAdapter () <SMAInterstitialDelegate, GADMediationInterstitialAd, GADMediationAdapter>
 @property (nonatomic) SMAInterstitial *interstitial;
+@property (nonatomic, weak, nullable) id<GADMediationInterstitialAdEventDelegate> delegate;
+@property (nonatomic) GADMediationInterstitialLoadCompletionHandler loadCompletionHandler;
+@property (nonatomic) UIViewController *presentingModalViewController;
 @end
 
 @implementation SMAAdMobSmaatoInterstitialAdapter
-@synthesize delegate;
 
 + (NSString *)version
 {
     return kSMAAdMobSmaatoInterstitialAdapterVersion;
 }
 
-- (void)requestInterstitialAdWithParameter:(NSString *)serverParameter
-                                     label:(NSString *)serverLabel
-                                   request:(GADCustomEventRequest *)request
-{
+- (void)loadInterstitialForAdConfiguration:(nonnull GADMediationInterstitialAdConfiguration *)adConfiguration
+                   completionHandler:
+                       (nonnull GADMediationInterstitialLoadCompletionHandler)completionHandler {
+    
+    //Assign delegate and save completion handler for later use
+    self.loadCompletionHandler = completionHandler;
+
     // Extract key-value pairs from passed server parameter string
-    NSDictionary *info = [self dictionaryFromServerParameter:serverParameter];
+    NSDictionary *info = nil;
+    
+    if ([adConfiguration.credentials.settings objectForKey:@"parameter"]) {
+        info = [self dictionaryFromServerParameter:adConfiguration.credentials.settings[@"parameter"]];
+    }
 
     // Extract ad space information
     NSString *adSpaceId = [self fetchValueForKey:kSMAAdMobCustomEventInfoAdSpaceIdKey fromEventInfo:info];
@@ -44,10 +53,10 @@ static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"8.13.0.0";
     }
 
     // Pass user location
-    if (request.userHasLocation) {
-        SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:request.userLatitude
-                                                                longitude:request.userLongitude
-                                                       horizontalAccuracy:request.userLocationAccuracyInMeters
+    if (adConfiguration.hasUserLocation) {
+        SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:adConfiguration.userLatitude
+                                                                longitude:adConfiguration.userLongitude
+                                                       horizontalAccuracy:adConfiguration.userLocationAccuracyInMeters
                                                                 timestamp:[NSDate date]];
         SmaatoSDK.userLocation = userLocation;
     }
@@ -93,11 +102,11 @@ static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"8.13.0.0";
     NSString *errorMessage = @"AdSpaceId can not be extracted. Please check your configuration on AdMob dashboard.";
     NSLog(@"[SmaatoSDK] [Error] %@: %@", [self smaatoMediationNetworkName], errorMessage);
 
-    if ([self.delegate respondsToSelector:@selector(customEventInterstitial:didFailAd:)]) {
+    if ([self.delegate respondsToSelector:@selector(didFailToPresentWithError:)]) {
         NSDictionary *userInfo = @{ NSLocalizedDescriptionKey : errorMessage };
         NSError *error = [NSError errorWithDomain:[self smaatoMediationNetworkName] code:kSMAErrorCodeInvalidRequest userInfo:userInfo];
 
-        [self.delegate customEventInterstitial:self didFailAd:error];
+        [self.delegate didFailToPresentWithError:error];
     }
 
     return NO;
@@ -107,14 +116,14 @@ static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"8.13.0.0";
 {
     NSMutableDictionary *parsedServerParameters = [NSMutableDictionary new];
     [[serverParameter componentsSeparatedByString:@"&"]
-        enumerateObjectsUsingBlock:^(NSString *_Nonnull obj, NSUInteger idx, BOOL *_Nonnull stop) {
-            NSArray *pair = [obj componentsSeparatedByString:@"="];
-            if (pair.count > 1) {
-                id key = pair[0];
-                id value = pair[1];
-                parsedServerParameters[key] = value;
-            }
-        }];
+    enumerateObjectsUsingBlock:^(NSString *_Nonnull obj, NSUInteger idx, BOOL *_Nonnull stop) {
+        NSArray *pair = [obj componentsSeparatedByString:@"="];
+        if (pair.count > 1) {
+            id key = pair[0];
+            id value = pair[1];
+            parsedServerParameters[key] = value;
+        }
+    }];
 
     return [parsedServerParameters copy];
 }
@@ -124,11 +133,52 @@ static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"8.13.0.0";
     return NSStringFromClass([self class]);
 }
 
-- (void)presentFromRootViewController:(UIViewController *)rootViewController
-{
+- (void)presentFromViewController:(nonnull UIViewController *)viewController {
     if (self.interstitial.availableForPresentation) {
-        [self.interstitial showFromViewController:rootViewController];
+        // The interstitial ad is available, present the ad.
+        [self.interstitial showFromViewController:viewController];
+    } else {
+        // Because publishers are expected to check that an ad is available before
+        // trying to show one, the above conditional should always hold true. If for
+        // any reason the adapter is not ready to present an ad, however, it should
+        // log an error with reason for failure.
+        NSString *description = @"No ads to display. Please make a new ad request. ";
+        NSDictionary *userInfo = @{ NSLocalizedDescriptionKey : description, NSLocalizedFailureReasonErrorKey : description };
+        NSError *error = [NSError errorWithDomain:@"com.smaaato.SMAAdMobSmaatoRewardedVideoAdapter" code:0 userInfo:userInfo];
+        [self.delegate didFailToPresentWithError:error];
     }
+}
+
+#pragma mark - GADMediationAdapter
+
++ (GADVersionNumber)adSDKVersion {
+    NSString *versionString = [SmaatoSDK sdkVersion];
+    NSArray *versionComponents = [versionString componentsSeparatedByString:@"."];
+    GADVersionNumber version = { 0 };
+    if (versionComponents.count == 3) {
+        version.majorVersion = [versionComponents[0] integerValue];
+        version.minorVersion = [versionComponents[1] integerValue];
+        version.patchVersion = [versionComponents[2] integerValue];
+    }
+    return version;
+}
+
++ (GADVersionNumber)adapterVersion {
+    NSString *versionString = kSMAAdMobSmaatoInterstitialAdapterVersion;
+    NSArray *versionComponents = [versionString componentsSeparatedByString:@"."];
+    GADVersionNumber version = { 0 };
+    if (versionComponents.count == 4) {
+        version.majorVersion = [versionComponents[0] integerValue];
+        version.minorVersion = [versionComponents[1] integerValue];
+        version.patchVersion = [versionComponents[2] integerValue];
+    }
+    return version;
+}
+
++ (nullable Class<GADAdNetworkExtras>)networkExtrasClass {
+    //we donot support keyword targetting, hence passing as nil
+    //keywords can be always set through GADRequest.keywords by publisher, if needed
+    return nil;
 }
 
 #pragma mark - SMAInterstitialDelegate
@@ -136,15 +186,16 @@ static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"8.13.0.0";
 - (void)interstitialDidLoad:(SMAInterstitial *)interstitial
 {
     self.interstitial = interstitial;
-    if ([self.delegate respondsToSelector:@selector(customEventInterstitialDidReceiveAd:)]) {
-        [self.delegate customEventInterstitialDidReceiveAd:self];
+    if (self.loadCompletionHandler) {
+        self.delegate = self.loadCompletionHandler(self, nil);
+        self.loadCompletionHandler = nil;
     }
 }
 
 - (void)interstitial:(SMAInterstitial *)interstitial didFailWithError:(NSError *)error
 {
-    if ([self.delegate respondsToSelector:@selector(customEventInterstitial:didFailAd:)]) {
-        [self.delegate customEventInterstitial:self didFailAd:error];
+    if ([self.delegate respondsToSelector:@selector(didFailToPresentWithError:)]) {
+        [self.delegate didFailToPresentWithError:error];
     }
 }
 
@@ -155,37 +206,42 @@ static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"8.13.0.0";
 
 - (void)interstitialWillAppear:(SMAInterstitial *)interstitial
 {
-    if ([self.delegate respondsToSelector:@selector(customEventInterstitialWillPresent:)]) {
-        [self.delegate customEventInterstitialWillPresent:self];
+    if ([self.delegate respondsToSelector:@selector(willPresentFullScreenView)]) {
+        [self.delegate willPresentFullScreenView];
+    }
+}
+
+- (void)interstitialDidAppear:(SMAInterstitial *)interstitial
+{
+    if ([self.delegate respondsToSelector:@selector(reportImpression)]) {
+        [self.delegate reportImpression];
     }
 }
 
 - (void)interstitialWillDisappear:(SMAInterstitial *)interstitial
 {
-    if ([self.delegate respondsToSelector:@selector(customEventInterstitialWillDismiss:)]) {
-        [self.delegate customEventInterstitialWillDismiss:self];
+    if ([self.delegate respondsToSelector:@selector(willDismissFullScreenView)]) {
+        [self.delegate willDismissFullScreenView];
     }
 }
 
 - (void)interstitialDidDisappear:(SMAInterstitial *)interstitial
 {
-    if ([self.delegate respondsToSelector:@selector(customEventInterstitialDidDismiss:)]) {
-        [self.delegate customEventInterstitialDidDismiss:self];
+    if ([self.delegate respondsToSelector:@selector(didDismissFullScreenView)]) {
+        [self.delegate didDismissFullScreenView];
     }
 }
 
 - (void)interstitialDidClick:(SMAInterstitial *)interstitial
 {
-    if ([self.delegate respondsToSelector:@selector(customEventInterstitialWasClicked:)]) {
-        [self.delegate customEventInterstitialWasClicked:self];
+    if ([self.delegate respondsToSelector:@selector(reportClick)]) {
+        [self.delegate reportClick];
     }
 }
 
 - (void)interstitialWillLeaveApplication:(SMAInterstitial *)interstitial
 {
-    if ([self.delegate respondsToSelector:@selector(customEventInterstitialWillLeaveApplication:)]) {
-        [self.delegate customEventInterstitialWillLeaveApplication:self];
-    }
+    // No corresponding method from AdMob SDK available. willBackgroundApplication is been depricated.
 }
 
 @end

@@ -11,6 +11,6 @@
 #import <Foundation/Foundation.h>
 #import <SmaatoSDKCore/SMAInterstitialNetworkEvent.h>
 
-@interface SMAAdMobCSMInterstitialAdapter : NSObject <SMAInterstitialNetworkEvent>
+@interface SMAAdMobCSMInterstitialAdapter: NSObject <SMAInterstitialNetworkEvent>
 
 @end

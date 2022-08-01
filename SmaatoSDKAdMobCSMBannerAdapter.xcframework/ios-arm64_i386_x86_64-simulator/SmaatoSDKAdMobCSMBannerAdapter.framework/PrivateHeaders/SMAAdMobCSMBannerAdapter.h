@@ -11,6 +11,6 @@
 #import <Foundation/Foundation.h>
 #import <SmaatoSDKCore/SMABannerNetworkEvent.h>
 
-@interface SMAAdMobCSMBannerAdapter : NSObject <SMABannerNetworkEvent>
+@interface SMAAdMobCSMBannerAdapter: NSObject <SMABannerNetworkEvent>
 
 @end

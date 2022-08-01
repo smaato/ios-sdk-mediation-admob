@@ -13,50 +13,60 @@
 #import "SMAAdMobSmaatoBannerAdapter.h"
 
 static NSString *const kSMAAdMobCustomEventInfoAdSpaceIdKey = @"adspaceId";
-static NSString *const kSMAAdMobBannerAdapterVersion = @"8.13.0.0";
+static NSString *const kSMAAdMobSmaatoBannerAdapterVersion = @"9.8.0.0";
 
-@interface SMAAdMobSmaatoBannerAdapter () <GADCustomEventBanner, SMABannerViewDelegate>
+@interface SMAAdMobSmaatoBannerAdapter () <GADMediationBannerAd, SMABannerViewDelegate>
 @property (nonatomic) SMABannerView *bannerView;
+@property (nonatomic, weak, nullable) id<GADMediationBannerAdEventDelegate> delegate;
+@property (nonatomic) GADMediationBannerLoadCompletionHandler loadCompletionHandler;
+@property (nonatomic) UIViewController *presentingModalViewController;
 @end
 
 @implementation SMAAdMobSmaatoBannerAdapter
 
-@synthesize delegate;
+@synthesize view;
 
 + (NSString *)version
 {
-    return kSMAAdMobBannerAdapterVersion;
+    return kSMAAdMobSmaatoBannerAdapterVersion;
 }
 
-- (void)requestBannerAd:(GADAdSize)adSize
-              parameter:(NSString *)serverParameter
-                  label:(NSString *)serverLabel
-                request:(GADCustomEventRequest *)request
+- (void)loadBannerForAdConfiguration:(nonnull GADMediationBannerAdConfiguration *)adConfiguration
+                   completionHandler:
+                       (nonnull GADMediationBannerLoadCompletionHandler)completionHandler
 {
+    //Assign delegate and save completion handler for later use
+    self.loadCompletionHandler = completionHandler;
+    
     // Convert ad size format
-    SMABannerAdSize convertedAdSize = [self SMABannerAdSizeFromRequestedSize:adSize];
-
-    // Extract key-value pairs from passed server parameter string
-    NSDictionary *info = [self dictionaryFromServerParameter:serverParameter];
-
+    SMABannerAdSize convertedAdSize = [self SMABannerAdSizeFromRequestedSize:adConfiguration.adSize];
+    
+    NSDictionary *info = nil;
+    
+    if ([adConfiguration.credentials.settings objectForKey:@"parameter"]) {
+        info = [self dictionaryFromServerParameter:adConfiguration.credentials.settings[@"parameter"]];
+    }
+    
     // Extract ad space information
     NSString *adSpaceId = [self fetchValueForKey:kSMAAdMobCustomEventInfoAdSpaceIdKey fromEventInfo:info];
-
+    
     // Verify ad space information
     if (![self checkCredentialsWithAdSpaceId:adSpaceId]) {
         return;
     }
-
+    
     // Create and configure ad view object
-    self.bannerView = [[SMABannerView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, adSize.size.width, adSize.size.height)];
+    self.bannerView = [[SMABannerView alloc] initWithFrame:CGRectMake(0.0f, 0.0f, adConfiguration.adSize.size.width, adConfiguration.adSize.size.height)];
     self.bannerView.delegate = self;
     self.bannerView.autoreloadInterval = kSMABannerAutoreloadIntervalDisabled;
+    
+    self.presentingModalViewController = adConfiguration.topViewController;
 
     // Pass user location
-    if (request.userHasLocation) {
-        SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:request.userLatitude
-                                                                longitude:request.userLongitude
-                                                       horizontalAccuracy:request.userLocationAccuracyInMeters
+    if (adConfiguration.hasUserLocation) {
+        SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:adConfiguration.userLatitude
+                                                                longitude:adConfiguration.userLongitude
+                                                       horizontalAccuracy:adConfiguration.userLocationAccuracyInMeters
                                                                 timestamp:[NSDate date]];
         SmaatoSDK.userLocation = userLocation;
     }
@@ -73,7 +83,7 @@ static NSString *const kSMAAdMobBannerAdapterVersion = @"8.13.0.0";
     // Passing mediation information
     SMAAdRequestParams *adRequestParams = [SMAAdRequestParams new];
     adRequestParams.mediationNetworkName = [self smaatoMediationNetworkName];
-    adRequestParams.mediationAdapterVersion = kSMAAdMobBannerAdapterVersion;
+    adRequestParams.mediationAdapterVersion = kSMAAdMobSmaatoBannerAdapterVersion;
     adRequestParams.mediationNetworkSDKVersion = [NSString stringWithFormat:@"%s", GoogleMobileAdsVersionString];
 
     // Load ad
@@ -97,24 +107,24 @@ static NSString *const kSMAAdMobBannerAdapterVersion = @"8.13.0.0";
     if (adSpaceId) {
         return YES;
     }
-
+    
     NSString *errorMessage = @"AdSpaceId can not be extracted. Please check your configuration on AdMob dashboard.";
     NSLog(@"[SmaatoSDK] [Error] %@: %@", [self smaatoMediationNetworkName], errorMessage);
-
-    if ([self.delegate respondsToSelector:@selector(customEventBanner:didFailAd:)]) {
+    
+    if ([self.delegate respondsToSelector:@selector(didFailToPresentWithError:)]) {
         NSDictionary *userInfo = @{ NSLocalizedDescriptionKey : errorMessage };
         NSError *error = [NSError errorWithDomain:[self smaatoMediationNetworkName] code:kSMAErrorCodeInvalidRequest userInfo:userInfo];
-
-        [self.delegate customEventBanner:self didFailAd:error];
+        
+        [self.delegate didFailToPresentWithError:error];
     }
-
+    
     return NO;
 }
 
 - (SMABannerAdSize)SMABannerAdSizeFromRequestedSize:(GADAdSize)requestedSize
 {
     CGSize requestAdSize = requestedSize.size;
-
+    
     if ((int)(requestAdSize.height) >= 600 && (int)(requestAdSize.width) >= 120) {
         return kSMABannerAdSizeSkyscraper_120x600;
     } else if ((int)(requestAdSize.height) >= 250 && (int)(requestAdSize.width) >= 300) {
@@ -130,15 +140,15 @@ static NSString *const kSMAAdMobBannerAdapterVersion = @"8.13.0.0";
 {
     NSMutableDictionary *parsedServerParameters = [NSMutableDictionary new];
     [[serverParameter componentsSeparatedByString:@"&"]
-        enumerateObjectsUsingBlock:^(NSString *_Nonnull obj, NSUInteger idx, BOOL *_Nonnull stop) {
-            NSArray *pair = [obj componentsSeparatedByString:@"="];
-            if (pair.count > 1) {
-                id key = pair[0];
-                id value = pair[1];
-                parsedServerParameters[key] = value;
-            }
-        }];
-
+     enumerateObjectsUsingBlock:^(NSString *_Nonnull obj, NSUInteger idx, BOOL *_Nonnull stop) {
+        NSArray *pair = [obj componentsSeparatedByString:@"="];
+        if (pair.count > 1) {
+            id key = pair[0];
+            id value = pair[1];
+            parsedServerParameters[key] = value;
+        }
+    }];
+    
     return [parsedServerParameters copy];
 }
 
@@ -147,38 +157,73 @@ static NSString *const kSMAAdMobBannerAdapterVersion = @"8.13.0.0";
     return NSStringFromClass([self class]);
 }
 
+#pragma mark - GADMediationAdapter
+
++ (GADVersionNumber)adSDKVersion {
+    NSString *versionString = [SmaatoSDK sdkVersion];
+    NSArray *versionComponents = [versionString componentsSeparatedByString:@"."];
+    GADVersionNumber version = { 0 };
+    if (versionComponents.count == 3) {
+        version.majorVersion = [versionComponents[0] integerValue];
+        version.minorVersion = [versionComponents[1] integerValue];
+        version.patchVersion = [versionComponents[2] integerValue];
+    }
+    return version;
+}
+
++ (GADVersionNumber)adapterVersion {
+    NSString *versionString = kSMAAdMobSmaatoBannerAdapterVersion;
+    NSArray *versionComponents = [versionString componentsSeparatedByString:@"."];
+    GADVersionNumber version = { 0 };
+    if (versionComponents.count == 4) {
+        version.majorVersion = [versionComponents[0] integerValue];
+        version.minorVersion = [versionComponents[1] integerValue];
+        version.patchVersion = [versionComponents[2] integerValue];
+    }
+    return version;
+}
+
++ (nullable Class<GADAdNetworkExtras>)networkExtrasClass {
+    //we donot support keyword targetting, hence passing as nil
+    //keywords can be always set through GADRequest.keywords by publisher, if needed
+    return nil;
+}
+
 #pragma mark - SMABannerViewDelegate
 
 - (UIViewController *)presentingViewControllerForBannerView:(SMABannerView *)bannerView
 {
-    return (UIViewController *)self.delegate.viewControllerForPresentingModalView;
+    return self.presentingModalViewController;
 }
 
 - (void)bannerViewDidLoad:(SMABannerView *)bannerView
 {
-    if ([self.delegate respondsToSelector:@selector(customEventBanner:didReceiveAd:)]) {
-        [self.delegate customEventBanner:self didReceiveAd:bannerView];
+    view = bannerView;
+    if (self.loadCompletionHandler) {
+        self.delegate = self.loadCompletionHandler(self, nil);
+        if ([self.delegate respondsToSelector:@selector(reportImpression)]) {
+            [self.delegate reportImpression];
+        }
+        self.loadCompletionHandler = nil;
     }
 }
 
 - (void)bannerViewDidClick:(SMABannerView *)bannerView
 {
-    if ([self.delegate respondsToSelector:@selector(customEventBannerWasClicked:)]) {
-        [self.delegate customEventBannerWasClicked:self];
+    if ([self.delegate respondsToSelector:@selector(reportClick)]) {
+        [self.delegate reportClick];
     }
 }
 
 - (void)bannerView:(SMABannerView *)bannerView didFailWithError:(NSError *)error
 {
-    if ([self.delegate respondsToSelector:@selector(customEventBanner:didFailAd:)]) {
-        [self.delegate customEventBanner:self didFailAd:error];
-    }
+    self.loadCompletionHandler(nil, error);
 }
 
 - (void)bannerViewWillPresentModalContent:(SMABannerView *)bannerView
 {
-    if ([self.delegate respondsToSelector:@selector(customEventBannerWillPresentModal:)]) {
-        [self.delegate customEventBannerWillPresentModal:self];
+    if ([self.delegate respondsToSelector:@selector(willPresentFullScreenView)]) {
+        [self.delegate willPresentFullScreenView];
     }
 }
 
@@ -189,26 +234,24 @@ static NSString *const kSMAAdMobBannerAdapterVersion = @"8.13.0.0";
 
 - (void)bannerViewDidDismissModalContent:(SMABannerView *)bannerView
 {
-    if ([self.delegate respondsToSelector:@selector(customEventBannerDidDismissModal:)]) {
-        [self.delegate customEventBannerDidDismissModal:self];
+    if ([self.delegate respondsToSelector:@selector(didDismissFullScreenView)]) {
+        [self.delegate didDismissFullScreenView];
     }
 }
 
 - (void)bannerWillLeaveApplicationFromAd:(SMABannerView *)bannerView
 {
-    if ([self.delegate respondsToSelector:@selector(customEventBannerWillLeaveApplication:)]) {
-        [self.delegate customEventBannerWillLeaveApplication:self];
-    }
+    // No corresponding method from AdMob SDK v9+ available.
 }
 
 - (void)bannerViewDidTTLExpire:(SMABannerView *)bannerView
 {
-    if ([self.delegate respondsToSelector:@selector(customEventBanner:didFailAd:)]) {
+    if ([self.delegate respondsToSelector:@selector(didFailToPresentWithError:)]) {
         NSString *errorMessage = @"Banner TTL has expired.";
         NSDictionary *userInfo = @{ NSLocalizedDescriptionKey : errorMessage };
         NSError *error = [NSError errorWithDomain:[self smaatoMediationNetworkName] code:kSMAErrorCodeNoAdAvailable userInfo:userInfo];
-
-        [self.delegate customEventBanner:self didFailAd:error];
+        
+        [self.delegate didFailToPresentWithError:error];
     }
 }
 

@@ -11,6 +11,6 @@
 #import <Foundation/Foundation.h>
 #import <SmaatoSDKCore/SMARewardedNetworkEvent.h>
 
-@interface SMAAdMobCSMRewardedAdapter : NSObject <SMARewardedNetworkEvent>
+@interface SMAAdMobCSMRewardedAdapter: NSObject <SMARewardedNetworkEvent>
 
 @end

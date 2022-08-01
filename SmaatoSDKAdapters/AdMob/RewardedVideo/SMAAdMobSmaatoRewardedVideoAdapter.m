@@ -13,7 +13,7 @@
 #import "SMAAdMobSmaatoRewardedVideoAdapter.h"
 
 static NSString *const kSMAAdMobCustomEventInfoAdSpaceIdKey = @"adspaceId";
-static NSString *const kSMAAdMobVideoRewardedVideoAdapterVersion = @"8.13.0.0";
+static NSString *const kSMAAdMobSmaatoRewardedAdapterVersion = @"9.8.0.0";
 
 @interface SMAAdMobSmaatoRewardedVideoAdapter () <SMARewardedInterstitialDelegate, GADMediationRewardedAd>
 @property (nonatomic, weak, nullable) id<GADMediationRewardedAdEventDelegate> delegate;
@@ -29,8 +29,7 @@ static NSString *const kSMAAdMobVideoRewardedVideoAdapterVersion = @"8.13.0.0";
     return nil;
 }
 
-+ (GADVersionNumber)adSDKVersion
-{
++ (GADVersionNumber)adSDKVersion {
     NSString *versionString = [SmaatoSDK sdkVersion];
     NSArray *versionComponents = [versionString componentsSeparatedByString:@"."];
     GADVersionNumber version = { 0 };
@@ -42,9 +41,8 @@ static NSString *const kSMAAdMobVideoRewardedVideoAdapterVersion = @"8.13.0.0";
     return version;
 }
 
-+ (GADVersionNumber)adapterVersion
-{
-    NSString *versionString = kSMAAdMobVideoRewardedVideoAdapterVersion;
++ (GADVersionNumber)adapterVersion {
+    NSString *versionString = kSMAAdMobSmaatoRewardedAdapterVersion;
     NSArray *versionComponents = [versionString componentsSeparatedByString:@"."];
     GADVersionNumber version = { 0 };
     if (versionComponents.count == 4) {
@@ -59,7 +57,11 @@ static NSString *const kSMAAdMobVideoRewardedVideoAdapterVersion = @"8.13.0.0";
                        completionHandler:(GADMediationRewardedLoadCompletionHandler)completionHandler
 {
     // Extract key-value pairs from passed server parameter string
-    NSDictionary *info = [self dictionaryFromServerParameter:adConfiguration.credentials.settings[@"parameter"]];
+    NSDictionary *info = nil;
+    
+    if ([adConfiguration.credentials.settings objectForKey:@"parameter"]) {
+        info = [self dictionaryFromServerParameter:adConfiguration.credentials.settings[@"parameter"]];
+    }
 
     // Extract ad space information
     self.adspaceId = [self fetchValueForKey:kSMAAdMobCustomEventInfoAdSpaceIdKey fromEventInfo:info];
@@ -102,7 +104,7 @@ static NSString *const kSMAAdMobVideoRewardedVideoAdapterVersion = @"8.13.0.0";
     // Passing mediation information
     SMAAdRequestParams *adRequestParams = [SMAAdRequestParams new];
     adRequestParams.mediationNetworkName = [self smaatoMediationNetworkName];
-    adRequestParams.mediationAdapterVersion = kSMAAdMobVideoRewardedVideoAdapterVersion;
+    adRequestParams.mediationAdapterVersion = kSMAAdMobSmaatoRewardedAdapterVersion;
     adRequestParams.mediationNetworkSDKVersion = [NSString stringWithFormat:@"%s", GoogleMobileAdsVersionString];
 
     // load a new ad
@@ -143,14 +145,14 @@ static NSString *const kSMAAdMobVideoRewardedVideoAdapterVersion = @"8.13.0.0";
 {
     NSMutableDictionary *parsedServerParameters = [NSMutableDictionary new];
     [[serverParameter componentsSeparatedByString:@"&"]
-        enumerateObjectsUsingBlock:^(NSString *_Nonnull obj, NSUInteger idx, BOOL *_Nonnull stop) {
-            NSArray *pair = [obj componentsSeparatedByString:@"="];
-            if (pair.count > 1) {
-                id key = pair[0];
-                id value = pair[1];
-                parsedServerParameters[key] = value;
-            }
-        }];
+    enumerateObjectsUsingBlock:^(NSString *_Nonnull obj, NSUInteger idx, BOOL *_Nonnull stop) {
+        NSArray *pair = [obj componentsSeparatedByString:@"="];
+        if (pair.count > 1) {
+            id key = pair[0];
+            id value = pair[1];
+            parsedServerParameters[key] = value;
+        }
+    }];
 
     return [parsedServerParameters copy];
 }
@@ -220,13 +222,15 @@ static NSString *const kSMAAdMobVideoRewardedVideoAdapterVersion = @"8.13.0.0";
 
 - (void)rewardedInterstitialWillDisappear:(SMARewardedInterstitial *)rewardedInterstitial
 {
-    // No corresponding method from AdMob SDK available.
+    if ([self.delegate respondsToSelector:@selector(willDismissFullScreenView)]) {
+        [self.delegate willDismissFullScreenView];
+    }
 }
 
 - (void)rewardedInterstitialDidDisappear:(SMARewardedInterstitial *)rewardedInterstitial
 {
-    if ([self.delegate respondsToSelector:@selector(willDismissFullScreenView)]) {
-        [self.delegate willDismissFullScreenView];
+    if ([self.delegate respondsToSelector:@selector(didDismissFullScreenView)]) {
+        [self.delegate didDismissFullScreenView];
     }
 }
 
@@ -241,9 +245,8 @@ static NSString *const kSMAAdMobVideoRewardedVideoAdapterVersion = @"8.13.0.0";
 {
     // Smaato doesn't retrieve exact reward (currency and amount) after video ad completion, due to this reason
     // publisher receives AdMobRewardedVideoAdapterViewController() callback with default GADAdReward value ( amount = 1 )
-    GADAdReward *aReward = [[GADAdReward alloc] initWithRewardType:@"" rewardAmount:[NSDecimalNumber one]];
-    if ([self.delegate respondsToSelector:@selector(didRewardUserWithReward:)]) {
-        [self.delegate didRewardUserWithReward:aReward];
+    if ([self.delegate respondsToSelector:@selector(didRewardUser)]) {
+        [self.delegate didRewardUser];
     }
 }
 

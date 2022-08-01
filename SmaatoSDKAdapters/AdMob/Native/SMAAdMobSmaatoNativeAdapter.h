@@ -1,6 +1,6 @@
 //
 //  SMAAdMobSmaatoNativeAdapter.h
-//  SmaatoSDKMopubBannerAdapter
+//  SmaatoSDKAdMobBannerAdapter
 //
 //  Created by Smaato Inc on 06.02.20.
 //  Copyright © 2020 Smaato Inc. All rights reserved.￼
@@ -11,6 +11,6 @@
 #import <Foundation/Foundation.h>
 #import <GoogleMobileAds/GoogleMobileAds.h>
 
-@interface SMAAdMobSmaatoNativeAdapter : NSObject <GADCustomEventNativeAd>
+@interface SMAAdMobSmaatoNativeAdapter: NSObject
 @property (class, nonatomic, readonly) NSString *version;
 @end
