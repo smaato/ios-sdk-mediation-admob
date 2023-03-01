@@ -13,7 +13,7 @@
 #import "SMAAdMobSmaatoBannerAdapter.h"
 
 static NSString *const kSMAAdMobCustomEventInfoAdSpaceIdKey = @"adspaceId";
-static NSString *const kSMAAdMobSmaatoBannerAdapterVersion = @"9.12.0.0";
+static NSString *const kSMAAdMobSmaatoBannerAdapterVersion = @"10.1.0.0";
 
 @interface SMAAdMobSmaatoBannerAdapter () <GADMediationBannerAd, SMABannerViewDelegate>
 @property (nonatomic) SMABannerView *bannerView;
@@ -63,6 +63,11 @@ static NSString *const kSMAAdMobSmaatoBannerAdapterVersion = @"9.12.0.0";
     self.presentingModalViewController = adConfiguration.topViewController;
 
     // Pass user location
+    /**
+     Changes in AdMob 10.0.0
+     https://developers.google.com/admob/ios/rel-notes
+     Remove already deprecated userGender, userBirthday, userHasLocation, userLatitude, userLongitude, userLocationAccuracyInMeters, and userLocationDescription.
+     
     if (adConfiguration.hasUserLocation) {
         SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:adConfiguration.userLatitude
                                                                 longitude:adConfiguration.userLongitude
@@ -70,7 +75,8 @@ static NSString *const kSMAAdMobSmaatoBannerAdapterVersion = @"9.12.0.0";
                                                                 timestamp:[NSDate date]];
         SmaatoSDK.userLocation = userLocation;
     }
-
+     */
+    
     /**
      Optional: You can also set specific user profile targeting parameters here.
      Please check the Smaato wiki for all available properties and further details.

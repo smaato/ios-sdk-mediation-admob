@@ -13,7 +13,7 @@
 #import "SMAAdMobSmaatoNativeAdapter.h"
 
 static NSString *const kSMAAdMobCustomEventInfoAdSpaceIdKey = @"adspaceId";
-static NSString *const kSMAAdMobSmaatoNativeAdapterVersion = @"9.12.0.0";
+static NSString *const kSMAAdMobSmaatoNativeAdapterVersion = @"10.1.0.0";
 
 typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifiedNativeAd> mediatedAd);
 
@@ -239,13 +239,21 @@ typedef void (^SMASMAAdMobMediatedNativeAdDeferredCallback)(id<GADMediatedUnifie
     self.nativeAd.delegate = self;
 
     // Pass user location
-    if (adConfiguration.hasUserLocation) {
-        SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:adConfiguration.userLatitude
-                                                                longitude:adConfiguration.userLongitude
-                                                       horizontalAccuracy:adConfiguration.userLocationAccuracyInMeters
-                                                                timestamp:[NSDate date]];
-        SmaatoSDK.userLocation = userLocation;
-    }
+    
+    /**
+     Changes in AdMob 10.0.0
+     https://developers.google.com/admob/ios/rel-notes
+     Remove already deprecated userGender, userBirthday, userHasLocation, userLatitude, userLongitude, userLocationAccuracyInMeters, and userLocationDescription.
+     
+     if (adConfiguration.hasUserLocation) {
+         SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:adConfiguration.userLatitude
+                                                                 longitude:adConfiguration.userLongitude
+                                                        horizontalAccuracy:adConfiguration.userLocationAccuracyInMeters
+                                                                 timestamp:[NSDate date]];
+         SmaatoSDK.userLocation = userLocation;
+     }
+     */
+    
 
     /**
      Optional:

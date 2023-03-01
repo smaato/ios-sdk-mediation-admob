@@ -14,7 +14,7 @@
 
 static NSString *const kSMAAdMobCustomEventInfoPublisherIdKey = @"publisherId";
 static NSString *const kSMAAdMobCustomEventInfoAdSpaceIdKey = @"adspaceId";
-static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"9.12.0.0";
+static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"10.1.0.0";
 
 @interface SMAAdMobSmaatoInterstitialAdapter () <SMAInterstitialDelegate, GADMediationInterstitialAd, GADMediationAdapter>
 @property (nonatomic) SMAInterstitial *interstitial;
@@ -53,6 +53,11 @@ static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"9.12.0.0";
     }
 
     // Pass user location
+    /**
+     Changes in AdMob 10.0.0
+     https://developers.google.com/admob/ios/rel-notes
+     Remove already deprecated userGender, userBirthday, userHasLocation, userLatitude, userLongitude, userLocationAccuracyInMeters, and userLocationDescription.
+     
     if (adConfiguration.hasUserLocation) {
         SMALocation *userLocation = [[SMALocation alloc] initWithLatitude:adConfiguration.userLatitude
                                                                 longitude:adConfiguration.userLongitude
@@ -60,6 +65,7 @@ static NSString *const kSMAAdMobSmaatoInterstitialAdapterVersion = @"9.12.0.0";
                                                                 timestamp:[NSDate date]];
         SmaatoSDK.userLocation = userLocation;
     }
+     */
 
     // OPTIONAL: Pass mediation information
     /**
