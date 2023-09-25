@@ -13,7 +13,7 @@
 #import "SMAAdMobSmaatoRewardedVideoAdapter.h"
 
 static NSString *const kSMAAdMobCustomEventInfoAdSpaceIdKey = @"adspaceId";
-static NSString *const kSMAAdMobSmaatoRewardedAdapterVersion = @"10.6.0.0";
+static NSString *const kSMAAdMobSmaatoRewardedAdapterVersion = @"10.10.0.0";
 
 @interface SMAAdMobSmaatoRewardedVideoAdapter () <SMARewardedInterstitialDelegate, GADMediationRewardedAd>
 @property (nonatomic, weak, nullable) id<GADMediationRewardedAdEventDelegate> delegate;
@@ -27,6 +27,11 @@ static NSString *const kSMAAdMobSmaatoRewardedAdapterVersion = @"10.6.0.0";
 + (nullable Class<GADAdNetworkExtras>)networkExtrasClass
 {
     return nil;
+}
+
++ (NSString *)version
+{
+    return kSMAAdMobSmaatoRewardedAdapterVersion;
 }
 
 + (GADVersionNumber)adSDKVersion {
