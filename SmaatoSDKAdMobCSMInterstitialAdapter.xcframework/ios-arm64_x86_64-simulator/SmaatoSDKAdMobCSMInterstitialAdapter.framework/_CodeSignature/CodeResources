@@ -4,6 +4,14 @@
 <dict>
 	<key>files</key>
 	<dict>
+		<key>GoogleMobileAdsResources.bundle/Info.plist</key>
+		<data>
+		l0IIMpCrHsY3fvojEmWVxHWrjFA=
+		</data>
+		<key>GoogleMobileAdsResources.bundle/PrivacyInfo.xcprivacy</key>
+		<data>
+		VWCA3MeaiPMoOAS1uOteTSLX8js=
+		</data>
 		<key>Info.plist</key>
 		<data>
 		C2PLUhBhuSfX05ym4PBX4vBGZts=
@@ -15,6 +23,20 @@
 	</dict>
 	<key>files2</key>
 	<dict>
+		<key>GoogleMobileAdsResources.bundle/Info.plist</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			9aX2dyifFjVQQr97GUzcaYyv4i6ED3vRqEk1s+S4LA8=
+			</data>
+		</dict>
+		<key>GoogleMobileAdsResources.bundle/PrivacyInfo.xcprivacy</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			afsRJYL8I/wGxjXJYdJio/e0tWVNKEeHSR3jAA2t+dI=
+			</data>
+		</dict>
 		<key>PrivateHeaders/SMAAdMobCSMInterstitialAdapter.h</key>
 		<dict>
 			<key>hash2</key>
